@@ -1,5 +1,5 @@
 
-use std::{fs, io::{self, Read, Write}, process::Command};
+use std::{error::Error, fs, io::{self, Read, Write}, process::Command};
 
 use crate::utils;
 
@@ -31,11 +31,11 @@ fn create_flutter_project(sub_matches: &clap::ArgMatches) {
         Some(platforms) => platforms,
         None => "ios,android"
     };
-    let ios_lang = match sub_matches.get_one::<String>("i") {
+    let ios_lang = match sub_matches.get_one::<String>("ios") {
         Some(langs) => langs,
         None => "objc"
     };
-    let android_lang = match sub_matches.get_one::<String>("a") {
+    let android_lang = match sub_matches.get_one::<String>("android") {
         Some(langs) => langs,
         None => "java"
     };
@@ -51,9 +51,9 @@ fn create_flutter_project(sub_matches: &clap::ArgMatches) {
     yaml.take(10240).read_to_string(&mut buf).expect("failed to read pubspec.yaml");
     buf = buf.replace("flutter_template", name);
     fs::File::create(format!("./{}/pubspec.yaml", name))
-        .expect("failed to open pubspec.yaml")
+        .expect("Failed to open pubspec.yaml")
         .write(buf.as_bytes())
-        .expect("failed to write pubspec.yaml");
+        .expect("Failed to write pubspec.yaml");
 
     let out_put = Command::new("flutter")
         .arg("create")
@@ -61,18 +61,27 @@ fn create_flutter_project(sub_matches: &clap::ArgMatches) {
         .arg(org)
         .arg("--platforms")
         .arg(platfroms)
-        .arg("i")
+        .arg("-i")
         .arg(ios_lang)
-        .arg("a")
+        .arg("-a")
         .arg(android_lang)
         .arg(".")
         .current_dir(format!("./{}", name))
-        .output()
-        .expect("failed to create flutter project");
-    if out_put.status.success() {
-        println!("Flutter project create successfully!");
-    } else {
-        io::stderr().write_all(&out_put.stderr).unwrap();
-        println!("Flutter project create failed!");
+        .output();
+
+    match out_put {
+        Ok(out) => {
+            if out.status.success() {
+                println!("Flutter project create successfully!");
+            } else {
+                std::fs::remove_dir_all(name).expect("Clean up failed, please remove it manually");
+                println!("Failed to create flutter project!");
+                io::stderr().write_all(&out.stderr).unwrap();
+            }
+        }
+        Err(e) => {
+            std::fs::remove_dir_all(name).expect("Clean up failed, please remove it manually");
+            println!("Failed to create flutter project: {}", e.to_string());
+        }
     }
 }
