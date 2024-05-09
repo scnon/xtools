@@ -20,13 +20,13 @@ pub fn build_project(sub_matches: &clap::ArgMatches) {
 }
 
 fn build_json_model() {
+    println!("jsons files:");
     let files = match read_all_files(JSON_PATH) {
         Ok(Some(files)) => files,
         _ => return,
     };
 
     for file in files {
-        println!("{}", file.name);
         let dart_info = parse_to_dart(&file);
         let name = &file.name.to_case(convert_case::Case::Pascal);
         let class_name = format!("{}Model", name);
@@ -59,10 +59,10 @@ fn build_json_model() {
         let dart_file = format!("{}{}.g.dart", OUT_PATH, &file.name);
         match write(&dart_file, source) {
             Ok(()) => {
-                println!("write success");
+                // println!("write success");
                 if let Ok(out_put) = Command::new("dart").arg("format").arg(&dart_file).output() {
                     if out_put.status.success() {
-                        println!("format file success !");
+                        // println!("format file success !");
                     } else {
                         println!("format file failed!");
                     }
@@ -75,5 +75,7 @@ fn build_json_model() {
             }
         }
     }
+
+    println!("build finish");
 }
 

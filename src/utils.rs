@@ -61,7 +61,7 @@ pub fn read_all_files(path: &str) -> Result<Option<Vec<FileInfo>>, std::io::Erro
         let entry = entry?;
         let path = entry.path();
         if path.is_file() {
-            println!("File: {}", path.display());
+            println!("\t- {}", path.display());
             let name = path.file_stem().and_then(|stem| stem.to_str()).unwrap_or("");
             let content = fs::read_to_string(&path)?;
             result.push(FileInfo {
