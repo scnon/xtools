@@ -5,7 +5,7 @@ use clap::{arg, Command};
 pub fn cli() -> Command {
     Command::new("xtools")
         .about("A cli tools for x")
-        .version("0.1.0")
+        .version("0.1.1")
         .subcommand_required(true)
         .arg_required_else_help(true)
         .allow_external_subcommands(true)
@@ -23,7 +23,6 @@ pub fn cli() -> Command {
         .subcommand(
             Command::new("build")
                 .about("Build something form here")
-                .about("Create project from template")
                 .arg(arg!(<TYPE>"The type of project to create")),
         )
 }
