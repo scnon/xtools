@@ -1,5 +1,5 @@
-
-pub static DART_TMPL: &'static str = r#"
+#[allow(dead_code)]
+pub static DART_TMPL: &str = r#"
 ////////////////////////////////////////////////////////////
 ////           ____             __ 
 ////          / __ \\____ ______/ /_
