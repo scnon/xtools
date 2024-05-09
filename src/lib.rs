@@ -1,3 +1,5 @@
+pub mod tmpl;
+
 use clap::{arg, Command};
 
 pub fn cli() -> Command {
@@ -18,5 +20,10 @@ pub fn cli() -> Command {
                 .arg(arg!(-a --android <LANG> "The language to use for android"))
                 .arg_required_else_help(true),
         )
-        .subcommand(Command::new("build").about("Build something form here"))
+        .subcommand(
+            Command::new("build")
+                .about("Build something form here")
+                .about("Create project from template")
+                .arg(arg!(<TYPE>"The type of project to create")),
+        )
 }

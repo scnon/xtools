@@ -1,6 +1,7 @@
 mod builder;
 mod creater;
 mod utils;
+mod tmpl;
 
 fn main() {
     let matches = xtools::cli().get_matches();
