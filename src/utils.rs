@@ -227,14 +227,14 @@ pub fn generate_from_json(fields: &Vec<FieldInfo>) -> String {
             }
             _ => {
                 let types = if field.types == "dynamic" || field.required {
-                    field.types.clone()
+                    String::new()
                 } else if field.default {
-                    format!("{}? ?? {}", field.types, field.value)
+                    format!("as {}? ?? {}", field.types, field.value)
                 } else {
-                    format!("{}?", field.types)
+                    format!("as {}?", field.types)
                 };
                 format!(
-                    "{name}: json['{name}'] as {types},\n",
+                    "{name}: json['{name}'] {types},\n",
                     name = field.name,
                     types = types
                 )
