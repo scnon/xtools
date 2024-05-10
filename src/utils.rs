@@ -1,47 +1,56 @@
 use convert_case::Casing;
 use serde_json::Value;
+use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::Path;
 use zip::read::ZipArchive;
 
+use crate::builder::TransItem;
+
 pub fn download_file(url: &str, path: &str) {
-    let resp = reqwest::blocking::get(url)
-        .unwrap_or_else(|err| panic!("request failed: {}", err));
-    
+    let resp = reqwest::blocking::get(url).unwrap_or_else(|err| panic!("request failed: {}", err));
+
     if !resp.status().is_success() {
         panic!("request failed with status code: {}", resp.status());
     }
 
-    let body = resp.bytes()
+    let body = resp
+        .bytes()
         .unwrap_or_else(|err| panic!("read body failed: {}", err));
 
-    let mut file = std::fs::File::create(path)
-        .unwrap_or_else(|err| panic!("create file failed: {}", err));
+    let mut file =
+        std::fs::File::create(path).unwrap_or_else(|err| panic!("create file failed: {}", err));
 
     file.write_all(&body)
         .unwrap_or_else(|err| panic!("write file failed: {}", err));
 }
 
-
 pub(crate) fn unzip_file(file: &str, out: &str) {
     let file = File::open(file).unwrap_or_else(|err| panic!("failed to open zip file: {}", err));
-    let mut archive = ZipArchive::new(file).unwrap_or_else(|err| panic!("failed to open zip archive: {}", err));
+    let mut archive =
+        ZipArchive::new(file).unwrap_or_else(|err| panic!("failed to open zip archive: {}", err));
 
     for i in 0..archive.len() {
-        let mut file = archive.by_index(i).unwrap_or_else(|err| panic!("failed to get file from archive: {}", err));
+        let mut file = archive
+            .by_index(i)
+            .unwrap_or_else(|err| panic!("failed to get file from archive: {}", err));
         let outpath = Path::new(out).join(file.name());
 
         if file.is_dir() {
-            fs::create_dir_all(&outpath).unwrap_or_else(|err| panic!("failed to create directory: {}", err));
+            fs::create_dir_all(&outpath)
+                .unwrap_or_else(|err| panic!("failed to create directory: {}", err));
         } else {
             if let Some(parent) = outpath.parent() {
                 if !parent.exists() {
-                    fs::create_dir_all(&parent).unwrap_or_else(|err| panic!("failed to create directory: {}", err));
+                    fs::create_dir_all(&parent)
+                        .unwrap_or_else(|err| panic!("failed to create directory: {}", err));
                 }
             }
-            let mut outfile = File::create(&outpath).unwrap_or_else(|err| panic!("failed to create file: {}", err));
-            io::copy(&mut file, &mut outfile).unwrap_or_else(|err| panic!("failed to extract file: {}", err));
+            let mut outfile = File::create(&outpath)
+                .unwrap_or_else(|err| panic!("failed to create file: {}", err));
+            io::copy(&mut file, &mut outfile)
+                .unwrap_or_else(|err| panic!("failed to extract file: {}", err));
         }
     }
 }
@@ -62,7 +71,10 @@ pub fn read_all_files(path: &str) -> Result<Option<Vec<FileInfo>>, std::io::Erro
         let path = entry.path();
         if path.is_file() {
             println!("\t- {}", path.display());
-            let name = path.file_stem().and_then(|stem| stem.to_str()).unwrap_or("");
+            let name = path
+                .file_stem()
+                .and_then(|stem| stem.to_str())
+                .unwrap_or("");
             let content = fs::read_to_string(&path)?;
             result.push(FileInfo {
                 name: String::from(name),
@@ -72,7 +84,6 @@ pub fn read_all_files(path: &str) -> Result<Option<Vec<FileInfo>>, std::io::Erro
     }
     Ok(Some(result))
 }
-
 
 pub struct FieldInfo {
     pub name: String,
@@ -137,7 +148,6 @@ pub fn parse_to_dart(file: &FileInfo) -> DartInfo {
 
     DartInfo { imports, fields }
 }
-
 
 fn get_type(value: &Value) -> String {
     match value {
@@ -213,11 +223,12 @@ pub fn generate_from_json(fields: &Vec<FieldInfo>) -> String {
                         name = field.name
                     )
                 } else {
-                    let map_expression = if ["int", "String", "double"].contains(&field.sub_type.as_str()) {
-                        format!("(e) => e as {}", field.sub_type)
-                    } else {
-                        format!("(e) => {}.fromJson(e)", field.sub_type)
-                    };
+                    let map_expression =
+                        if ["int", "String", "double"].contains(&field.sub_type.as_str()) {
+                            format!("(e) => e as {}", field.sub_type)
+                        } else {
+                            format!("(e) => {}.fromJson(e)", field.sub_type)
+                        };
                     format!(
                         "{name}: (json['{name}'] as List? ?? []).map({map_expression}).toList(),\n",
                         name = field.name,
@@ -245,7 +256,6 @@ pub fn generate_from_json(fields: &Vec<FieldInfo>) -> String {
     result
 }
 
-
 pub fn generate_to_json(fields: &Vec<FieldInfo>) -> String {
     fields
         .iter()
@@ -260,3 +270,138 @@ pub fn generate_imports(imports: Vec<String>) -> String {
         .collect::<String>()
 }
 
+pub(crate) fn generate_ikeys(trans_items: &Vec<TransItem>) -> String {
+    let mut result = String::from("library;\n");
+
+    for item in trans_items {
+        result.push_str(&gen_trans_class(item));
+    }
+
+    result.push_str(&gen_ikey_class(trans_items));
+
+    result
+}
+
+fn gen_ikey_class(trans_items: &[TransItem]) -> String {
+    let mut result = String::from("/// 国际化文本常量\nclass Ikey {\nIkey._();\n");
+    for item in trans_items {
+        let class = item.prefix.to_case(convert_case::Case::Pascal);
+        result.push_str(
+            format!(
+                "///{}\nstatic final {} = Auto{}();\n",
+                item.tips, item.prefix, class
+            )
+            .as_str(),
+        );
+    }
+
+    result.push_str("}");
+
+    result
+}
+
+fn gen_trans_class(item: &TransItem) -> String {
+    let mut result = String::new();
+
+    result.push_str(
+        format!(
+            "///{}\n class Auto{} {{\n",
+            item.tips,
+            item.prefix.to_case(convert_case::Case::Pascal)
+        )
+        .as_str(),
+    );
+    for (key, _) in item.content.iter() {
+        let v_key = format!("{}_{}", item.prefix, key.to_case(convert_case::Case::Snake));
+        let key = format!("k{}", key.to_case(convert_case::Case::Pascal));
+        result.push_str(format!("final {} = '{}';\n", key, v_key).as_str());
+    }
+
+    result.push_str("}\n");
+    result
+}
+
+pub fn check_and_create(path: &str) -> bool {
+    let out_path = Path::new(path);
+    if !out_path.exists() {
+        match fs::create_dir_all(out_path) {
+            Ok(_) => true,
+            Err(e) => {
+                println!("create dir failed: {:?}", e);
+                false
+            }
+        }
+    } else {
+        true
+    }
+}
+
+pub fn write_with_format(file_path: &str, content: &str) {
+    match fs::write(file_path, content) {
+        Ok(_) => {
+            if let Ok(out_put) = std::process::Command::new("dart")
+                .arg("format")
+                .arg(&file_path)
+                .output()
+            {
+                if out_put.status.success() {
+                    // println!("format file success !");
+                } else {
+                    println!("format file failed!");
+                }
+            } else {
+                println!("Failed to format code");
+            }
+        }
+        Err(e) => {
+            println!("write file failed: {:?}", e);
+        }
+    }
+}
+
+pub(crate) fn generate_translation(trans_items: &Vec<TransItem>, lang: &str) -> String {
+    let mut result = format!("part of 'index.dart';\nfinal {}Message = <String,String>{{\n", lang);
+
+    for item in trans_items {
+        result.push_str(format!("\t// {}\n", item.tips).as_str());
+        for field in &item.content {
+            let value = field.1.replace("\n", "\\n");
+            result.push_str(format!("\"{}_{}\": \"{}\",\n", item.prefix, field.0, value).as_str());
+        }
+    }
+
+    result.push_str("};");
+
+    result
+}
+
+#[allow(unused)]
+pub(crate) fn translate_from_json_to_csv(
+    trans_items: &Vec<TransItem>,
+    records: Vec<csv::Result<csv::StringRecord>>,
+    mut writer: csv::Writer<File>,
+) {
+    let mut merged_content: HashMap<String, String> = HashMap::new();
+
+    for item in trans_items {
+        for (key, value) in &item.content {
+            merged_content.insert(key.clone(), value.clone());
+        }
+    }
+    // let records = reader.records();
+    // for (key, value) in merged_content {
+    //     writer.write_record(&[key, value]);
+    // }
+    // for item in records {
+    //     let mut record = item.unwrap();
+    //     let key = record.get(0).unwrap();
+
+    //     if merged_content.contains_key(key) {
+    //         // if let Some(field) = record.get(0) {
+    //         //     *field = merged_content.get(key).unwrap();
+    //         // }
+            
+    //         // writer.write_record(record);
+    //     }
+    // }
+}

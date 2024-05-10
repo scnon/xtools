@@ -10,15 +10,15 @@ const FLUTTER_URL: &str = "https://github.com/scnon/flutter_template/archive/ref
 const FLUTTER_PROJECT_NAME: &str = "flutter_template-main";
 
 pub fn create_project(sub_matches: &clap::ArgMatches) {
-    let project_type = sub_matches.get_one::<String>("TYPE").expect("required");
 
-    match project_type.as_str() {
-        "flutter" => {
+    match sub_matches.subcommand() {
+        Some(("flutter", sub_matches)) => {
             create_flutter_project(sub_matches);
         }
-        _ => {
-            println!("Unknown project type: {}", project_type);
+        Some((cmd, _)) => {
+            println!("Unknown subcommand {}", cmd);
         }
+        None => {}
     }
 }
 
