@@ -1,6 +1,6 @@
 use convert_case::Casing;
+use csv::StringRecord;
 use serde_json::Value;
-use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::Path;
@@ -360,7 +360,10 @@ pub fn write_with_format(file_path: &str, content: &str) {
 }
 
 pub(crate) fn generate_translation(trans_items: &Vec<TransItem>, lang: &str) -> String {
-    let mut result = format!("part of 'index.dart';\nfinal {}Message = <String,String>{{\n", lang);
+    let mut result = format!(
+        "part of 'index.dart';\nfinal {}Message = <String,String>{{\n",
+        lang
+    );
 
     for item in trans_items {
         result.push_str(format!("\t// {}\n", item.tips).as_str());
@@ -378,16 +381,43 @@ pub(crate) fn generate_translation(trans_items: &Vec<TransItem>, lang: &str) -> 
 #[allow(unused)]
 pub(crate) fn translate_from_json_to_csv(
     trans_items: &Vec<TransItem>,
-    records: Vec<csv::Result<csv::StringRecord>>,
+    records: Vec<csv::StringRecord>,
     mut writer: csv::Writer<File>,
+    len: usize,
 ) {
-    let mut merged_content: HashMap<String, String> = HashMap::new();
+    let mut result: Vec<csv::StringRecord> = vec![];
+    let json_records: Vec<csv::StringRecord> = trans_items
+        .iter()
+        .map(|item| -> Vec<StringRecord> {
+            item.content
+                .iter()
+                .map(|field| {
+                    let mut record = StringRecord::new();
+                    let key = format!("{}_{}", item.prefix, field.0);
+                    record.push_field(key.as_str());
+                    record.push_field(field.1.replace("/n", "//n").as_str());
 
-    for item in trans_items {
-        for (key, value) in &item.content {
-            merged_content.insert(key.clone(), value.clone());
-        }
+                    let csv_record = records.iter().find(|e| &e[0] == key.as_str());
+
+                    // let has =  else {false};
+
+                    if len > 2 {
+                        for i in 1..=(len - 2) {
+                            let val = if let Some(v) = csv_record {v[i + 1].to_string()} else { String::new() }; 
+                            record.push_field(val.as_str());
+                        }
+                    }
+                    record
+                })
+                .collect()
+        })
+        .flat_map(|inner| inner)
+        .collect();
+
+    for item in json_records {
+        writer.write_record(&item).unwrap_or_else(|e| {});
     }
+
     // let records = reader.records();
     // for (key, value) in merged_content {
     //     writer.write_record(&[key, value]);
@@ -400,8 +430,11 @@ pub(crate) fn translate_from_json_to_csv(
     //         // if let Some(field) = record.get(0) {
     //         //     *field = merged_content.get(key).unwrap();
     //         // }
-            
+
     //         // writer.write_record(record);
     //     }
     // }
+
+    writer.flush();
+    drop(writer)
 }

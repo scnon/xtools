@@ -1,5 +1,3 @@
-pub mod tmpl;
-
 use clap::{arg, Command};
 
 pub fn cli() -> Command {
