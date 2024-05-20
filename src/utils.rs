@@ -1,5 +1,6 @@
 use convert_case::Casing;
 use csv::StringRecord;
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use serde_json::Value;
 use std::fs::{self, File};
 use std::io::{self, Write};
@@ -8,22 +9,18 @@ use zip::read::ZipArchive;
 
 use crate::builder::TransItem;
 
-pub fn download_file(url: &str, path: &str) {
-    let resp = reqwest::blocking::get(url).unwrap_or_else(|err| panic!("request failed: {}", err));
+pub fn download_file(url: &str, path: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let resp = reqwest::blocking::get(url)?;
 
     if !resp.status().is_success() {
         panic!("request failed with status code: {}", resp.status());
     }
 
-    let body = resp
-        .bytes()
-        .unwrap_or_else(|err| panic!("read body failed: {}", err));
+    let body = resp.bytes()?;
+    let mut file = std::fs::File::create(path)?;
+    file.write_all(&body)?;
 
-    let mut file =
-        std::fs::File::create(path).unwrap_or_else(|err| panic!("create file failed: {}", err));
-
-    file.write_all(&body)
-        .unwrap_or_else(|err| panic!("write file failed: {}", err));
+    Ok(())
 }
 
 pub(crate) fn unzip_file(file: &str, out: &str) {
@@ -437,4 +434,18 @@ pub(crate) fn translate_from_json_to_csv(
 
     writer.flush();
     drop(writer)
+}
+
+
+pub(crate) fn show_progress(len: u64) -> ProgressBar {
+    let m = MultiProgress::new();
+    let sty = ProgressStyle::with_template(
+        "[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7}",
+    )
+    .unwrap()
+    .progress_chars("##-");
+
+    let pb = m.add(ProgressBar::new(len));
+    pb.set_style(sty.clone());
+    pb
 }

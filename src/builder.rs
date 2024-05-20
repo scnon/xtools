@@ -3,7 +3,9 @@ use crate::utils::delete_file;
 use super::tmpl;
 use super::utils;
 use convert_case::Casing;
+use image::io::Reader as ImageReader;
 use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
 use std::fs::rename;
 use std::{collections::HashMap, fs::read_to_string};
 
@@ -14,6 +16,7 @@ pub fn build_project(sub_matches: &clap::ArgMatches) {
     match sub_matches.subcommand() {
         Some(("json", _)) => build_json_model(),
         Some(("translate", sub_matches)) => build_translation(sub_matches),
+        Some(("icon", sub_matches)) => build_icon(sub_matches),
         Some((cmd, _)) => {
             println!("unknow subcommand {}", cmd);
         }
@@ -70,21 +73,17 @@ pub struct TransItem {
 }
 
 fn build_translation(sub_matches: &clap::ArgMatches) {
-    let from = match sub_matches.get_one::<String>("from") {
-        Some(val) => val,
-        None => "json",
-    };
-    let to = match sub_matches.get_one::<String>("to") {
-        Some(val) => val,
-        None => "dart"
-    };
+    let def_from = "json".to_string();
+    let def_to = "dart".to_string();
+    let from = sub_matches.get_one::<String>("from").unwrap_or(&def_from);
+    let to = sub_matches.get_one::<String>("to").unwrap_or(&def_to);
     println!("build translation from: {} to: {}", from, to);
 
     if !utils::check_and_create(TRANS_OUT) {
         return;
     }
 
-    match from {
+    match from.as_str() {
         "json" => build_from_json(to),
         "csv" => build_from_csv(to),
         _ => println!("Invalid source format"),
@@ -101,7 +100,10 @@ fn build_from_json(to: &str) {
             utils::write_with_format(&format!("{}/const_key.dart", TRANS_OUT), &ikeys);
             for lang in &["zh", "en"] {
                 let lang_source = utils::generate_translation(&trans_items, lang);
-                utils::write_with_format(&format!("{}/i18n_{}.dart", TRANS_OUT, lang), &lang_source);
+                utils::write_with_format(
+                    &format!("{}/i18n_{}.dart", TRANS_OUT, lang),
+                    &lang_source,
+                );
             }
         }
         "csv" => {
@@ -145,13 +147,11 @@ fn build_from_csv(to: &str) {
                 for titem in &mut new_items {
                     for item in &mut titem.content {
                         let key = format!("{}_{}", titem.prefix, item.0);
-                        if let Some(val) = records.iter().find_map(|e| {
-                            if e[0] == key {
-                                e.get(idx)
-                            } else {
-                                None
-                            }
-                        }) {
+                        if let Some(val) =
+                            records
+                                .iter()
+                                .find_map(|e| if e[0] == key { e.get(idx) } else { None })
+                        {
                             if !val.is_empty() {
                                 *item.1 = val.to_string();
                             }
@@ -167,4 +167,86 @@ fn build_from_csv(to: &str) {
         "json" => { /* build json */ }
         _ => println!("Invalid target format"),
     }
+}
+
+const ANDROID_CONFIGS: &'static str = r#"{
+    "mipmap-hdpi": 72,
+    "mipmap-mdpi": 48,
+    "mipmap-xhdpi": 96,
+    "mipmap-xxhdpi": 144,
+    "mipmap-xxxhdpi": 192
+}"#;
+const ANDROID_OUT: &str = "android/src/main/res";
+const IOS_OUT: &str = "ios/Runner/Assets.xcassets/AppIcon.appiconset";
+
+#[derive(Serialize, Deserialize, Debug)]
+struct IOSConfig {
+    images: Vec<IOSSizeConfig>,
+}
+#[derive(Serialize, Deserialize, Debug)]
+struct IOSSizeConfig {
+    size: String,
+    filename: String,
+    scale: String,
+}
+
+fn build_icon(sub_matches: &clap::ArgMatches) {
+    let file = "./data/icon.png".to_string();
+    let out = ".".to_string();
+    let platforms = "android,ios".to_string();
+    let file = sub_matches.get_one::<String>("file").unwrap_or(&file);
+    let out = sub_matches.get_one::<String>("out").unwrap_or(&out);
+    let platforms = sub_matches
+        .get_one::<String>("platforms")
+        .unwrap_or(&platforms);
+
+    let img = ImageReader::open(file).expect("Image open error");
+    let img = img.decode().unwrap();
+
+    if platforms.contains("android") {
+        println!("Begin generate icons for Android");
+        let configs: Map<String, Value> = serde_json::from_str(ANDROID_CONFIGS).unwrap();
+        let pb = utils::show_progress(configs.len() as u64);
+        for item in configs.iter() {
+            let size = item.1.as_number().unwrap().as_u64().unwrap() as u32;
+            let img = img.clone();
+            let img = img.resize(size, size, image::imageops::FilterType::CatmullRom);
+            let res = img.save(format!("{}/{}/{}/ic_launcher.png", out, ANDROID_OUT, item.0));
+            match res {
+                Ok(_) => {
+                    pb.inc(1);
+                }
+                Err(e) => {
+                    println!("save file faild: {}", e);
+                }
+            }
+        }
+        println!("Android icons generate done");
+    }
+    if platforms.contains("ios") {
+        println!("Begin generate icons for IOS");
+        let json_str = read_to_string(format!("{}/Contents.json", IOS_OUT)).unwrap();
+        let configs: IOSConfig = serde_json::from_str(&json_str).unwrap();
+        let pb = utils::show_progress(configs.images.len() as u64);
+        for item in configs.images {
+            let size: Vec<&str> = item.size.split("x").collect();
+            let size: f32 = size.first().unwrap().parse().unwrap();
+            let scale: f32 = item.scale.replace("x", "").parse().unwrap();
+            let size = (size * scale) as u32;
+            let img = img.clone();
+            let img = img.resize(size, size, image::imageops::FilterType::CatmullRom);
+            let res = img.save(format!("{}/{}/{}.png", out, IOS_OUT, item.filename));
+            match res {
+                Ok(_) => {
+                    pb.inc(1);
+                }
+                Err(e) => {
+                    println!("Save file faild: {}", e);
+                }
+            }
+        }
+        println!("IOS icons generate done");
+    }
+
+    println!("All icons done. Enjoy it!");
 }

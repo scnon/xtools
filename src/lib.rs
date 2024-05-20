@@ -3,7 +3,7 @@ use clap::{arg, Command};
 pub fn cli() -> Command {
     Command::new("xtools")
         .about("A cli tools for x")
-        .version("0.1.1")
+        .version("0.1.2")
         .subcommand_required(true)
         .arg_required_else_help(true)
         .allow_external_subcommands(true)
@@ -32,6 +32,13 @@ pub fn cli() -> Command {
                         .about("Build translation from json or csv")
                         .arg(arg!(--from <FROM> "The translate source"))
                         .arg(arg!(--to <TO> "The translate to")),
-                ),
+                )
+                .subcommand(
+                    Command::new("icon")
+                    .about("Build app icons")
+                    .arg(arg!(--platforms <PLATFORMS> "The platforms for icons"))
+                    .arg(arg!(--file <FILE> "The icon source file location"))
+                    .arg(arg!(--out <PATH> "The output path for the flutter project"))
+            ),
         )
 }

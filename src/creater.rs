@@ -10,7 +10,6 @@ const FLUTTER_URL: &str = "https://github.com/scnon/flutter_template/archive/ref
 const FLUTTER_PROJECT_NAME: &str = "flutter_template-main";
 
 pub fn create_project(sub_matches: &clap::ArgMatches) {
-
     match sub_matches.subcommand() {
         Some(("flutter", sub_matches)) => {
             create_flutter_project(sub_matches);
@@ -23,26 +22,17 @@ pub fn create_project(sub_matches: &clap::ArgMatches) {
 }
 
 fn create_flutter_project(sub_matches: &clap::ArgMatches) {
-    let name = match sub_matches.get_one::<String>("name") {
-        Some(name) => name,
-        None => "example",
-    };
-    let org = match sub_matches.get_one::<String>("org") {
-        Some(org) => org,
-        None => "com.example",
-    };
-    let platfroms = match sub_matches.get_one::<String>("platforms") {
-        Some(platforms) => platforms,
-        None => "ios,android",
-    };
-    let ios_lang = match sub_matches.get_one::<String>("ios") {
-        Some(langs) => langs,
-        None => "objc",
-    };
-    let android_lang = match sub_matches.get_one::<String>("android") {
-        Some(langs) => langs,
-        None => "java",
-    };
+    let def_name = "example".to_string();
+    let def_org = "com.example".to_string();
+    let def_platforms = "ios,android".to_string();
+
+    let name = sub_matches.get_one::<String>("name").unwrap_or(&def_name);
+    let org = sub_matches.get_one::<String>("org").unwrap_or(&def_org);
+    let platfroms = sub_matches
+        .get_one::<String>("platforms")
+        .unwrap_or(&def_platforms);
+    let ios_lang = sub_matches.get_one::<&str>("ios").unwrap_or(&"objc");
+    let android_lang = sub_matches.get_one::<&str>("android").unwrap_or(&"java");
 
     println!(
         "Creating flutter project: {} with org: {} and platforms: {}",
@@ -50,7 +40,12 @@ fn create_flutter_project(sub_matches: &clap::ArgMatches) {
     );
 
     let zip_file = format!("{}.zip", FLUTTER_PROJECT_NAME);
-    utils::download_file(FLUTTER_URL, zip_file.as_str());
+    match utils::download_file(FLUTTER_URL, zip_file.as_str()) {
+        Ok(_) => {}
+        Err(e) => {
+            panic!("Download file failed! : {:}", e);
+        }
+    }
     utils::unzip_file(zip_file.as_str(), ".");
     utils::delete_file(zip_file.as_str());
     std::fs::rename(FLUTTER_PROJECT_NAME, name).expect("failed to rename dir");
@@ -83,14 +78,16 @@ fn create_flutter_project(sub_matches: &clap::ArgMatches) {
     match out_put {
         Ok(out) => {
             if out.status.success() {
-                println!(r#"Flutter project create successfully!
+                println!(
+                    r#"Flutter project create successfully!
 In order to run your application, type:
 
     $ cd {name}
     $ flutter run
 
 Your application code is in {name}/lib/
-enjoy it."#);
+enjoy it."#
+                );
             } else {
                 std::fs::remove_dir_all(name).expect("Clean up failed, please remove it manually");
                 println!("Failed to create flutter project!");
