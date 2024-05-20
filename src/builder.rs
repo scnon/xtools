@@ -176,7 +176,7 @@ const ANDROID_CONFIGS: &'static str = r#"{
     "mipmap-xxhdpi": 144,
     "mipmap-xxxhdpi": 192
 }"#;
-const ANDROID_OUT: &str = "android/src/main/res";
+const ANDROID_OUT: &str = "android/app/src/main/res";
 const IOS_OUT: &str = "ios/Runner/Assets.xcassets/AppIcon.appiconset";
 
 #[derive(Serialize, Deserialize, Debug)]
